@@ -1,0 +1,17 @@
+{
+  "host": "127.0.0.1",
+  "port": 8190,
+  "allow": ["127.0.0.0/8", "::1/128"],
+  "lang": "en",
+  "public_url": "",
+  "h3_dir": "~/h3.c",
+  "model_dir": "~/h3.c/MiniMax-H3",
+  "output_dir": "~/h3-studio/jobs",
+  "state_dir": "~/.local/state/h3d",
+  "idle_minutes": 60,
+  "notify_idle": true,
+  "speed_factor": 1.0,
+  "plugins": ["macos_translate"],
+  "plugin_config": {},
+  "translate_order": []
+}

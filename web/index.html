@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffd43b">
+<title>H3 Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ff4f8b' stroke='%231d1b2f' stroke-width='3'/%3E%3Cpath d='M13 10l9 6-9 6z' fill='white' stroke='%231d1b2f' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="clapper" aria-hidden="true"><i></i></span>
+    <div><h1 data-i18n="app.title">H3 Studio</h1><p data-i18n="app.sub"></p></div>
+  </div>
+  <div class="engine">
+    <button type="button" id="langBtn" class="lang-btn" data-i18n="lang.switch" data-i18n-title="lang.title"></button>
+    <div class="engine-meta">
+      <span id="engineLabel" class="pill off"></span>
+      <span id="engineSub" class="sub-meta"></span>
+    </div>
+    <label class="switch" id="engineSwitch">
+      <input type="checkbox" id="engineToggle" data-i18n-aria="engine.aria"><span class="slider"></span>
+    </label>
+  </div>
+</header>
+<div id="setupWarn" class="setup-warn" hidden></div>
+
+<main class="layout">
+  <section class="panel composer">
+    <!-- mode -->
+    <div class="tabs" id="modeTabs" role="tablist">
+      <button data-mode="t2v" class="active" role="tab" data-i18n="mode.t2v"></button>
+      <button data-mode="ref" role="tab" data-i18n="mode.ref"></button>
+      <button data-mode="fl" role="tab" data-i18n="mode.fl"></button>
+      <span class="tab-blob" aria-hidden="true"></span>
+    </div>
+
+    <!-- references -->
+    <div class="block" id="refBlock" hidden>
+      <div class="label-row"><label data-i18n="ref.label"></label><span class="hint" data-i18n="ref.hint"></span></div>
+      <div class="drop" data-target="refs">
+        <input type="file" accept="image/*" multiple hidden>
+        <div class="thumbs" id="refThumbs"></div>
+        <button type="button" class="drop-hint"><b>＋</b> <i data-i18n="ref.drop"></i></button>
+      </div>
+    </div>
+    <div class="block" id="flBlock" hidden>
+      <div class="two">
+        <div>
+          <div class="label-row"><label data-i18n="fl.first"></label><span class="hint" data-i18n="fl.hint"></span></div>
+          <div class="drop single" data-target="first"><input type="file" accept="image/*" hidden><div class="thumbs"></div><button type="button" class="drop-hint"><b>＋</b> <i data-i18n="fl.first"></i></button></div>
+        </div>
+        <div>
+          <div class="label-row"><label data-i18n="fl.last"></label><span class="hint" data-i18n="fl.hint"></span></div>
+          <div class="drop single" data-target="last"><input type="file" accept="image/*" hidden><div class="thumbs"></div><button type="button" class="drop-hint"><b>＋</b> <i data-i18n="fl.last"></i></button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- description and dialogue -->
+    <div class="block">
+      <div class="label-row"><label for="desc" data-i18n="desc.label"></label><label class="check mini" id="aiToggle" data-i18n-title="ai.title" hidden><input type="checkbox" id="useAI"><span id="aiToggleText"></span></label></div>
+      <div class="mention-wrap">
+        <textarea id="desc" rows="3" class="bubble"></textarea>
+        <div id="mentionPop" class="mention-pop" role="listbox" hidden></div>
+      </div>
+      <div id="mentionBar" class="mention-bar" hidden></div>
+      <div class="translate-row">
+        <label class="sub" for="translateMode" data-i18n="tr.label"></label>
+        <select id="translateMode" class="bubble">
+          <option value="auto" data-i18n="tr.auto"></option>
+          <option value="local" data-i18n="tr.local"></option>
+          <option value="off" data-i18n="tr.off"></option>
+        </select>
+        <div id="translateHint" class="hint translate-hint"></div>
+      </div>
+    </div>
+    <div class="block two dialogue">
+      <div>
+        <label for="dialogue"><span data-i18n="dialogue.label"></span><span class="opt" data-i18n="optional"></span></label>
+        <input id="dialogue" class="bubble speech" data-i18n-ph="dialogue.ph">
+      </div>
+      <div>
+        <label for="lang" data-i18n="lang.label"></label>
+        <select id="lang" class="bubble">
+          <option value="English" data-i18n="lang.English"></option><option value="Chinese" data-i18n="lang.Chinese"></option>
+          <option value="Japanese" data-i18n="lang.Japanese"></option><option value="Cantonese" data-i18n="lang.Cantonese"></option>
+        </select>
+      </div>
+    </div>
+
+    <!-- size, length, quality -->
+    <div class="block">
+      <label data-i18n="aspect.label"></label>
+      <div class="chips" id="aspectChips"></div>
+      <div class="size-row">
+        <div id="sizeWrap"><select id="sizeSel" class="bubble" data-i18n-aria="size.aria"></select></div>
+        <div id="customSize" hidden class="two tight">
+          <input id="cw" class="bubble" type="number" step="32" min="32" max="1344" value="576" data-i18n-aria="w">
+          <input id="ch" class="bubble" type="number" step="32" min="32" max="1344" value="1024" data-i18n-aria="h">
+        </div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="label-row"><label for="seconds" data-i18n="dur.label"></label><span class="hint" id="framesInfo"></span></div>
+      <div class="range-row">
+        <input type="range" id="secondsRange" min="0.5" max="15" step="0.5" value="2" data-i18n-aria="dur.aria">
+        <input type="number" id="seconds" class="bubble" min="0.2" max="15" step="0.1" value="2"><span class="unit" data-i18n="sec"></span>
+      </div>
+    </div>
+    <div class="block">
+      <label data-i18n="q.label"></label>
+      <div class="seg" id="qualitySeg">
+        <button data-q="draft" class="q-draft"><b data-i18n="q.draft"></b><span data-i18n="q.draft.sub"></span></button>
+        <button data-q="recommended" class="q-rec active"><b data-i18n="q.recommended"></b><span data-i18n="q.recommended.sub"></span></button>
+        <button data-q="high" class="q-high"><b data-i18n="q.high"></b><span data-i18n="q.high.sub"></span></button>
+        <button data-q="max" class="q-max"><b data-i18n="q.max"></b><span data-i18n="q.max.sub"></span></button>
+      </div>
+    </div>
+
+    <!-- occasional options -->
+    <div class="folds">
+      <details class="fold" id="promptFold">
+        <summary><span class="fold-ico">✎</span><i data-i18n="fold.prompt"></i> <em id="promptState"></em></summary>
+        <div class="fold-body">
+          <div class="row-actions">
+            <button type="button" id="rewriteBtn" class="btn sm sparkle" data-i18n="p.ai" hidden></button>
+            <button type="button" id="clearPromptBtn" class="btn sm ghost" data-i18n="p.clear"></button>
+          </div>
+          <textarea id="prompt" rows="12" class="bubble mono" data-i18n-ph="p.ph"></textarea>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="fold-ico">⚙</span><i data-i18n="fold.adv"></i> <em data-i18n="fold.adv.sub"></em></summary>
+        <div class="fold-body grid3">
+          <div><label class="sub" for="steps" data-i18n="adv.steps"></label><input id="steps" class="bubble" type="number" min="1" max="60" data-i18n-ph="byQuality"></div>
+          <div><label class="sub" for="layers" data-i18n="adv.layers"></label><input id="layers" class="bubble" type="number" min="30" max="50" data-i18n-ph="byQuality"></div>
+          <div><label class="sub" for="reuseMode" data-i18n="adv.reuse"></label>
+            <select id="reuseMode" class="bubble"><option value="" data-i18n="byQuality"></option><option value="none" data-i18n="reuse.none"></option><option value="reuse2" data-i18n="reuse.r2"></option><option value="reuse3" data-i18n="reuse.r3"></option><option value="core4" data-i18n="reuse.c4"></option><option value="core6" data-i18n="reuse.c6"></option></select></div>
+          <div><label class="sub" for="seedMode" data-i18n="adv.seedMode"></label>
+            <select id="seedMode" class="bubble"><option value="fixed" data-i18n="seed.fixed"></option><option value="random" data-i18n="seed.random"></option></select></div>
+          <div><label class="sub" for="seed" data-i18n="adv.seed"></label><input id="seed" class="bubble" type="number" value="42"></div>
+          <div><label class="sub" for="renderMode" data-i18n="adv.render"></label>
+            <select id="renderMode" class="bubble"><option value="" data-i18n="byQuality"></option><option value="1" data-i18n="render.same"></option><option value="0.75" data-i18n="render.34"></option><option value="0.5" data-i18n="render.12"></option></select></div>
+          <div><label class="sub" for="crop" data-i18n="adv.crop"></label>
+            <select id="crop" class="bubble"><option value="center" data-i18n="crop.center"></option><option value="top" data-i18n="crop.top"></option><option value="none" data-i18n="crop.none"></option></select></div>
+          <div><label class="sub" for="refSize" data-i18n="adv.refSize"></label>
+            <select id="refSize" class="bubble"><option value="match" data-i18n="refSize.match"></option><option value="max" data-i18n="refSize.max"></option></select></div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="music"><span data-i18n="adv.music"></span></label>
+            <label class="check"><input type="checkbox" id="tokenRed"><span data-i18n="adv.token"></span></label>
+            <label class="check"><input type="checkbox" id="refRope"><span data-i18n="adv.rope"></span></label>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="fold-ico">♫</span><i data-i18n="fold.av"></i> <em data-i18n="fold.av.sub"></em></summary>
+        <div class="fold-body">
+          <div class="label-row"><label data-i18n="av.audio"></label><span class="hint" data-i18n="av.audio.hint"></span></div>
+          <div class="drop" data-target="audios"><input type="file" accept="audio/*" multiple hidden><div class="thumbs list"></div><button type="button" class="drop-hint"><b>＋</b> <i data-i18n="av.addAudio"></i></button></div>
+          <div class="label-row"><label data-i18n="av.video"></label><span class="hint" data-i18n="av.video.hint"></span></div>
+          <div class="drop" data-target="videos"><input type="file" accept="video/*" multiple hidden><div class="thumbs list"></div><button type="button" class="drop-hint"><b>＋</b> <i data-i18n="av.addVideo"></i></button></div>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="fold-ico">▤</span><i data-i18n="fold.mem"></i> <em data-i18n="fold.mem.sub"></em></summary>
+        <div class="fold-body grid3">
+          <div class="checks span3">
+            <label class="check"><input type="checkbox" id="ssd"><span data-i18n="mem.ssd"></span></label>
+            <label class="check"><input type="checkbox" id="int8row"><span data-i18n="mem.int8"></span></label>
+            <label class="check"><input type="checkbox" id="noZeroCopy"><span data-i18n="mem.zero"></span></label>
+          </div>
+          <div><label class="sub" for="qwenPf" data-i18n="mem.pf"></label><input id="qwenPf" class="bubble" type="number" min="0" max="8" data-i18n-ph="default"></div>
+          <div><label class="sub" for="qwenDepth" data-i18n="mem.depth"></label><input id="qwenDepth" class="bubble" type="number" min="1" max="6" data-i18n-ph="default3"></div>
+          <p class="hint span3" data-i18n="mem.note"></p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="fold-ico">⇪</span><i data-i18n="fold.out"></i> <em id="outSummary"></em></summary>
+        <div class="fold-body grid3">
+          <div class="span2"><label class="sub" for="title" data-i18n="out.title"></label><input id="title" class="bubble" data-i18n-ph="out.title.ph"></div>
+          <div id="notifyWrap" hidden><label class="sub" for="notifyTo" data-i18n="out.notify"></label>
+            <select id="notifyTo" class="bubble"></select></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="submit-bar">
+      <div class="est-wrap"><div id="estimate" class="estimate"></div><div id="formMsg" class="hint"></div></div>
+      <button id="submitBtn" class="btn go"><span class="go-txt" data-i18n="go"></span></button>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="panel now" id="currentCard" aria-live="polite">
+      <div class="panel-head"><h2 data-i18n="now"></h2><span id="queueCount" class="badge"></span></div>
+      <div id="current"></div>
+      <div id="queue"></div>
+    </section>
+    <section class="panel wall-panel">
+      <div class="panel-head"><h2 data-i18n="wall"></h2><span class="hint" id="histCount"></span></div>
+      <div id="history" class="wall"></div>
+    </section>
+  </aside>
+</main>
+
+<dialog id="detailDlg">
+  <form method="dialog"><button class="close" data-i18n-aria="close">✕</button></form>
+  <div id="detailBody"></div>
+</dialog>
+<dialog id="confirmDlg" class="small-dlg">
+  <p id="confirmMsg"></p>
+  <div class="dlg-acts" id="confirmActs"></div>
+</dialog>
+<div id="toast" class="toast" hidden></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+<script src="/static/i18n.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

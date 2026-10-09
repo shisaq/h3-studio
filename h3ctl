@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""h3ctl — command-line client for h3d (for terminals, scripts and chat agents).
+
+  h3ctl status                          engine and queue
+  h3ctl start | stop [--force]          switch the engine on / off
+  h3ctl submit --desc "..." [options]   submit a job (see `h3ctl submit -h`)
+  h3ctl compose --desc "..." [options]  only print the structured prompt
+  h3ctl jobs [-n 10] | job ID | cancel ID
+
+The server address comes from $H3D_URL, else from the port in the config file ($H3D_CONFIG or
+~/.config/h3d/config.json). Output language follows the server's `lang` setting; override with $H3_LANG.
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from urllib.parse import quote
+
+SIZES = {"9:16": (576, 1024), "16:9": (1024, 576), "1:1": (512, 512), "3:4": (768, 1024), "4:3": (1024, 768)}
+QUALITIES = ["draft", "recommended", "high", "max"]
+STATE = {"lang": os.environ.get("H3_LANG", "")}
+
+MSG = {
+    "err": ("错误：{}", "Error: {}"),
+    "down": ("h3d 服务没有运行（{}）", "h3d is not running ({})"),
+    "nofile": ("找不到文件 {}", "File not found: {}"),
+    "off": ("关闭", "off"), "off_idle": ("关闭（空闲自动关闭）", "off (switched itself off after idling)"),
+    "stopping": ("当前任务完成后关闭", "switching off after the current job"),
+    "on": ("开启", "on"), "idle": ("，空闲中，{} 分钟后自动关闭", ", idle, auto-off in {} min"),
+    "engine": ("h3 服务：{}", "h3 engine: {}"),
+    "running": ("正在生成：{}（{}×{}）— {}  [ID {}]", "Generating: {} ({}×{}) — {}  [ID {}]"),
+    "warming": ("准备中", "warming up"),
+    "queued": ("排队：{}  [ID {}]", "Queued: {}  [ID {}]"),
+    "mem": ("内存可用：{}%", "Memory free: {}%"),
+    "web": ("网页：{}", "Web UI: {}"),
+    "stopped": ("h3 服务已关闭", "h3 engine is off"),
+    "canceled": ("已取消", "Canceled"),
+    "need": ("需要 --prompt-file 或 --desc", "--prompt-file or --desc is required"),
+    "about": ('多张参考图不用 AI 改写时，每张图都要用 --about 写明它是什么（具体的名词），例如\n'
+              '  --about "person: young woman | a short black bob, a beige apron" --about "scene: snowy pine forest | deep snow"\n'
+              '不写的话模型多半只会照着其中一张画。',
+              'With several reference images and no AI rewrite, each image needs --about with a specific noun, e.g.\n'
+              '  --about "person: young woman | a short black bob, a beige apron" --about "scene: snowy pine forest | deep snow"\n'
+              'Otherwise the model will mostly follow just one of them.'),
+    "submitted": ("已提交：{}（{}，{}×{}，约 {:g} 秒，画质 {}）  [ID {}]", "Submitted: {} ({}, {}×{}, about {:g} s, quality {})  [ID {}]"),
+    "ahead": ("前面还有 {} 个任务", "{} job(s) ahead"), "started": ("已开始生成", "Generation has started"),
+    "will_notify": ("完成后视频会自动发送到 {}。", "The video will be sent to {} when it is done."),
+    "no_notify": ("没有设置推送，请用 h3ctl job 查看结果。", "No notification is set up; check the result with `h3ctl job`."),
+    "st_done": ("完成", "done"), "st_failed": ("失败", "failed"), "st_canceled": ("已取消", "canceled"),
+    "st_queued": ("排队", "queued"), "st_running": ("生成中", "running"),
+    "min": ("{} 分 {} 秒", "{} min {} s"), "sec": ("{} 秒", "{} s"),
+}
+
+
+def m(key, *a):
+    return MSG[key][0 if STATE["lang"] == "zh" else 1].format(*a)
+
+
+def base_url():
+    if os.environ.get("H3D_URL"):
+        return os.environ["H3D_URL"].rstrip("/")
+    port = 8190
+    try:
+        cfg = Path(os.environ.get("H3D_CONFIG") or Path.home() / ".config/h3d/config.json")
+        port = int(json.loads(cfg.read_text()).get("port") or port)
+    except Exception:
+        pass
+    return f"http://127.0.0.1:{port}"
+
+
+def call(path, body=None, method=None, raw=None, timeout=300):
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+    req = urllib.request.Request(base_url() + path, data=data, method=method or ("POST" if data is not None else "GET"))
+    if raw is None:
+        req.add_header("Content-Type", "application/json")
+    if STATE["lang"]:
+        req.add_header("X-H3-Lang", STATE["lang"])
+    # Loopback: never let proxy environment variables capture this request.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(req, timeout=timeout) as r:
+            return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read()).get("error")
+        except Exception:
+            msg = str(e)
+        sys.exit(m("err", msg))
+    except urllib.error.URLError:
+        sys.exit(m("err", m("down", base_url())))
+
+
+def upload(path):
+    p = Path(path).expanduser()
+    if not p.is_file():
+        sys.exit(m("err", m("nofile", p.name)))
+    return call(f"/api/upload?name={quote(p.name)}", raw=p.read_bytes(), timeout=600)["id"]
+
+
+def client_env():
+    """Environment variables that notifier plugins asked for (e.g. which chat this command was run from)."""
+    return {k: os.environ[k] for k in call("/api/client-env") if os.environ.get(k)}
+
+
+def size_of(a):
+    if not a.size:
+        return SIZES["9:16"]
+    if a.size in SIZES:
+        return SIZES[a.size]
+    w, _, h = a.size.lower().partition("x")
+    return int(w), int(h)
+
+
+def fmt_dur(s):
+    s = int(round(s or 0))
+    return m("min", s // 60, s % 60) if s >= 60 else m("sec", s)
+
+
+def show_status(s=None):
+    s = s or call("/api/status")
+    e = s["engine"]
+    if not e["enabled"]:
+        state = m("off_idle") if e["by"] == "idle" else m("off")
+    elif e["stopping"]:
+        state = m("stopping")
+    else:
+        state = m("on")
+        if e.get("idle_left_s") is not None:
+            state += m("idle", max(1, round(e["idle_left_s"] / 60)))
+    print(m("engine", state))
+    c = s["current"]
+    if c:
+        pr = c.get("progress") or {}
+        step = f"{pr.get('phase')} {pr.get('done')}/{pr.get('total')}" if pr else m("warming")
+        print(m("running", c["title"] or c["mode_name"], c["params"]["width"], c["params"]["height"], step, c["id"]))
+    for q in s["queue"]:
+        print(m("queued", q["title"] or q["mode_name"], q["id"]))
+    mem = s.get("memory") or {}
+    if mem.get("free_pct") is not None:
+        print(m("mem", mem["free_pct"]))
+    print(m("web", s.get("public_url") or base_url()))
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="h3ctl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("status")
+    sub.add_parser("start")
+    sub.add_parser("stop").add_argument("--force", action="store_true", help="cancel the running job too")
+    for name in ("submit", "compose", "rewrite"):
+        p = sub.add_parser(name)
+        p.add_argument("--prompt-file", help="a finished structured prompt; skips composing")
+        p.add_argument("--desc", default="", help="what should happen; may mention @img1 / @vid1 / @vid1.audio / @aud1")
+        p.add_argument("--dialogue", default="", help="one spoken line")
+        p.add_argument("--language", default="English", help="language of the dialogue: English, Chinese, Japanese, Cantonese ...")
+        p.add_argument("--image", action="append", default=[], help="reference image, repeatable (@img1, @img2 ...)")
+        p.add_argument("--about", action="append", default=[],
+                       help='one per --image, in order: "role: what it is | features"; role is person/scene/object/outfit/style')
+        p.add_argument("--first", help="first-frame image")
+        p.add_argument("--last", help="last-frame image")
+        p.add_argument("--video", action="append", default=[], help="reference video with its sound, repeatable (@vid1; its sound is @vid1.audio)")
+        p.add_argument("--silent-video", action="append", default=[], help="reference video without its sound (numbered after --video)")
+        p.add_argument("--audio", action="append", default=[], help="reference audio, repeatable (@aud1 ...)")
+        p.add_argument("--size", help="9:16 (default) / 16:9 / 1:1 / 3:4 / 4:3 / WIDTHxHEIGHT")
+        p.add_argument("--seconds", type=float, default=2.0)
+        p.add_argument("--quality", default="recommended", choices=QUALITIES)
+        p.add_argument("--seed", default="42", help='a number, or "random"')
+        p.add_argument("--crop", default="center", choices=["center", "top", "none"], help="how reference images are cropped to the frame")
+        p.add_argument("--title", default="")
+        p.add_argument("--music", action="store_true", help="keep background music (off by default)")
+        p.add_argument("--translate", default="auto", choices=["auto", "local", "off"],
+                       help="Chinese to English: auto = first available engine; local = on this device only; off")
+        p.add_argument("--ai", action="store_true", help="have the rewriter plugin (an LLM) write the prompt instead of the built-in composer")
+        p.add_argument("--no-ai", action="store_true", help=argparse.SUPPRESS)      # the default now; kept for old scripts
+        p.add_argument("--notify", default="default", help='"default", "none", or PLUGIN:TARGET')
+    sub.add_parser("jobs").add_argument("-n", type=int, default=8)
+    sub.add_parser("job").add_argument("id")
+    sub.add_parser("cancel").add_argument("id")
+    a = ap.parse_args()
+
+    status = call("/api/status")
+    STATE["lang"] = STATE["lang"] or status.get("lang") or "en"
+
+    if a.cmd == "status":
+        return show_status(status)
+    if a.cmd == "start":
+        return show_status(call("/api/engine", {"action": "start", "by": "cli", "client_env": client_env()}))
+    if a.cmd == "stop":
+        r = call("/api/engine", {"action": "stop", "force": a.force})
+        return print(m("stopping") if r["result"] == "stopping" else m("stopped"))
+    if a.cmd == "jobs":
+        for j in call(f"/api/jobs?limit={a.n}"):
+            wall = f", {fmt_dur(j['metrics']['wall_s'])}" if j.get("metrics", {}).get("wall_s") else ""
+            print(f"[{m('st_' + j['status'])}] {j['title'] or j['mode_name']} — {j['params']['width']}×{j['params']['height']}{wall}  [ID {j['id']}]")
+        return
+    if a.cmd == "job":
+        j = call(f"/api/jobs/{a.id}")
+        return print(json.dumps({k: j[k] for k in ("id", "status", "title", "params", "metrics", "error", "progress")},
+                                ensure_ascii=False, indent=1))
+    if a.cmd == "cancel":
+        call(f"/api/jobs/{a.id}/cancel", {})
+        return print(m("canceled"))
+
+    use_ai = a.ai or (a.cmd == "rewrite" and not a.no_ai)
+    w, h = size_of(a)
+    imgs = [upload(x) for x in a.image]
+    first = upload(a.first) if a.first else None
+    last = upload(a.last) if a.last else None
+    # Upload videos and audio before composing: the server needs them to turn @vid1 / @aud1 into official labels.
+    vids = [{"id": upload(x), "kind": "video"} for x in a.video] + [{"id": upload(x), "kind": "silent"} for x in a.silent_video]
+    auds = [upload(x) for x in a.audio]
+    about = []
+    for x in a.about:                      # "role: what it is | features"; without a role the server guesses by position
+        role, sep, rest = x.partition(":")
+        if not sep:
+            role, rest = "", x
+        name, _, desc = rest.partition("|")
+        about.append({"role": role.strip().lower(), "name": name.strip(), "desc": desc.strip()})
+    mode = "ref2va" if (imgs or auds or vids) else ("fl2va" if first and last else "i2va" if first else "l2va" if last else "t2va")
+    if a.cmd != "submit" or not a.prompt_file:
+        if not a.desc:
+            sys.exit(m("err", m("need")))
+        if not use_ai and len(imgs) >= 2 and len([x for x in about if x.get("name")]) < len(imgs):
+            sys.exit(m("err", m("about")))
+        r = call("/api/rewrite" if use_ai else "/api/compose",
+                 {"mode": mode, "description": a.desc, "dialogue": a.dialogue, "language": a.language, "seconds": a.seconds,
+                  "width": w, "height": h, "music": a.music, "images": imgs if mode == "ref2va" else [x for x in (first, last) if x],
+                  "videos": vids, "audios": auds, "refs": about, "translate": a.translate})
+        prompt = r["prompt"]
+        if r.get("note"):
+            print(r["note"], file=sys.stderr)
+        if a.cmd != "submit":
+            return print(prompt)
+    else:
+        prompt = Path(a.prompt_file).expanduser().read_text()
+    if a.notify == "none":
+        notify = False
+    elif a.notify == "default":
+        notify = True
+    else:
+        plugin, _, target = a.notify.partition(":")
+        notify = {"plugin": plugin, "target": target}
+    r = call("/api/jobs", {
+        "prompt": prompt, "title": a.title, "description": a.desc, "source": "chat", "autostart": True,
+        "notify": notify, "client_env": client_env(), "music": a.music,
+        "params": {"width": w, "height": h, "seconds": a.seconds, "quality": a.quality,
+                   "seed": "random" if a.seed == "random" else int(a.seed), "crop": a.crop},
+        "inputs": {"ref_images": imgs, "first_frame": first, "last_frame": last, "ref_audios": auds, "ref_videos": vids},
+    })
+    j, ahead = r["job"], r.get("ahead", 0)
+    print(m("submitted", j["title"] or j["mode_name"], j["mode_name"], w, h, a.seconds, a.quality, j["id"]))
+    print(m("ahead", ahead) if ahead > 0 else m("started"))
+    print(m("will_notify", j["notify"]["target"].split(":")[0]) if j.get("notify") else m("no_notify"))
+
+
+if __name__ == "__main__":
+    main()

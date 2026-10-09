@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+bin/
+# MiniMax's prompt guides may not be redistributed; copy them here yourself (see plugins/codex_rewrite.py)
+guides/
+# local settings and secrets never belong in the repository
+config.json
+*.key
