@@ -92,6 +92,20 @@ A plugin is one file in `plugins/` with a `register(api)` function. Enable it by
 
 Translators are tried in the order they are listed; if one fails, the next is used. In the UI you can also pick "on this device only" or "don't translate" per job.
 
+Plugin settings go under `plugin_config`, keyed by plugin name. For example, `codex_rewrite` uses whatever model Codex is configured to use (`model` in `~/.codex/config.toml`), so it follows when you switch Codex to a newer model. To pin a model for h3 only:
+
+```json
+"plugins": ["macos_translate", "codex_rewrite"],
+"plugin_config": {
+  "codex_rewrite": {
+    "model": "",
+    "proxy": ""
+  }
+}
+```
+
+Leave `model` empty to follow Codex, or set a model name. If the named model fails, the plugin retries with the Codex default. Other keys: `codex_bin` (default: `codex` on PATH), `timeout` (seconds, default 240), `guide_dir` (default: `guides/`), `proxy` (e.g. `http://127.0.0.1:7890` if Codex needs one). The settings for each plugin are listed at the top of its file.
+
 ### Writing your own
 
 ```python

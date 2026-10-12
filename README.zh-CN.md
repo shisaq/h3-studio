@@ -92,6 +92,20 @@ H3 要结构化提示词。随便写一段话，动作会走样，更明显的�
 
 翻译引擎按列出的顺序尝试，前一个失败就用下一个。网页里每次提交还可以选「只用本机翻译」或「不翻译」。
 
+插件的设置写在 `plugin_config` 里，以插件名为键。例如 `codex_rewrite` 默认用 Codex 自己设置的模型（`~/.codex/config.toml` 里的 `model`），在 Codex 里换了新模型，它就跟着换。想只给 h3 固定一个模型：
+
+```json
+"plugins": ["macos_translate", "codex_rewrite"],
+"plugin_config": {
+  "codex_rewrite": {
+    "model": "",
+    "proxy": ""
+  }
+}
+```
+
+`model` 留空就跟随 Codex，填模型名就固定用它；指定的模型调用失败时，会退回 Codex 的默认模型再试一次。其他可选项：`codex_bin`（默认在 PATH 里找 `codex`）、`timeout`（秒，默认 240）、`guide_dir`（默认 `guides/`）、`proxy`（Codex 需要走代理时填，如 `http://127.0.0.1:7890`）。每个插件能设什么，写在插件文件开头的说明里。
+
 ### 自己写一个
 
 ```python
